@@ -18,7 +18,7 @@ module feature_motion = feature_smoke [smoke=motion, feature_flag1=feature_flag2
 
 
 
-module sensor_smoke_1
+module sensor_smoke_S1
 // This is a generic sensor module to model boolean sensors, such as observing smoke. 
 // If the feature is absent (0), the sensed value is (0).
 // If the feature is detected, the sensed value is changed to 1.
@@ -31,7 +31,7 @@ sensor_flag1 : [0..1] init 0;
     
 endmodule
 
-module sensor_smoke_2 = sensor_smoke_1 [smoke_sensor_S1=smoke_sensor_S3, sensor_flag1=sensor_flag2] endmodule
+module sensor_smoke_S3 = sensor_smoke_S1 [smoke_sensor_S1=smoke_sensor_S3, sensor_flag1=sensor_flag2] endmodule
 
 module sensor_door_S2
 
