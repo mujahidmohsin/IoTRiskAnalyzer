@@ -1,0 +1,297 @@
+mdp
+
+ const int att_cap = 7; //Attacker capability
+
+ 	
+module feature_smoke
+// This is a generic module to model the non-deterministic nature of environmental features, such as smoke
+    
+smoke : [0..1] init 0;
+feature_flag1 : [0..1] init 0;
+	[f] smoke=0 & feature_flag1=0 -> (smoke'=0) & (feature_flag1'=1);
+	[f] smoke=0 & feature_flag1=0 -> (smoke'=1) & (feature_flag1'=1);
+    
+endmodule
+
+//Module of motion by renaming of the generic module
+module feature_motion = feature_smoke [smoke=motion, feature_flag1=feature_flag2] endmodule
+
+
+
+module sensor_smoke_1
+// This is a generic sensor module to model boolean sensors, such as observing smoke. 
+// If the feature is absent (0), the sensed value is (0).
+// If the feature is detected, the sensed value is changed to 1.
+    
+smoke_sensor_S1 : [0..2] init 2;
+sensor_flag1 : [0..1] init 0;
+
+	[s] smoke=0 & feature_flag1=1 & sensor_flag1=0 -> (smoke_sensor_S1'=0) & (sensor_flag1'=1);
+	[s] smoke=1 & feature_flag1=1 & sensor_flag1=0 -> (smoke_sensor_S1'=1) & (sensor_flag1'=1);
+    
+endmodule
+
+module sensor_smoke_2 = sensor_smoke_1 [smoke_sensor_S1=smoke_sensor_S3, sensor_flag1=sensor_flag2] endmodule
+
+module sensor_door_S2
+
+door_sensor_S2 : [0..2] init 2;
+sensor_flag_S2 : [0..1] init 0;
+
+    [] door=0 & door_flag=1 & sensor_flag_S2=0 -> (door_sensor_S2'=0) & (sensor_flag_S2'=1);
+	[] door=1 & door_flag=1 & sensor_flag_S2=0 -> (door_sensor_S2'=1) & (sensor_flag_S2'=1);	
+
+
+endmodule
+
+//module sensor_door_S2 = sensor_smoke_1 [smoke_sensor_S1=door_sensor_S2, sensor_flag1=sensor_flag_S2,smoke=door,feature_flag1=door_flag] endmodule
+//module sensor_motion_1 = sensor_smoke_1 [smoke_sensor_S1=motion_sensor_S4, sensor_flag1=sensor_flag3,smoke=motion,feature_flag1=feature_flag2] endmodule
+
+
+
+
+module link_L3
+// The module models the link status of L3 link.
+// S1RecG1 models the value received at gateway G1 from S1. 
+// If the link L3 is down the received value =2 which is used to code that the value is not received
+// In our scenario L3 is physically secure and cannot be jammed. Therefore, link_L3_Jamm variable will always be zero
+// counter variable is used to sequence attacker actions.
+
+link_flagL3 : [0..1] init 0;
+S1RecG1 : [0..2] init 2;
+	
+	[l37] link_L3_Jamm=1 & counter=1 & link_flagL3=0-> (S1RecG1'=2) & (link_flagL3'=1);
+	[l37] link_L3_Jamm=0 & counter=1 & link_flagL3=0-> (S1RecG1'=smoke_sensor_S1) &  (link_flagL3'=1);
+	
+  	    
+endmodule
+
+ // L7 link module thru renaming of L3 link module.
+ // S1RecG1 has been made equal to S3RecC1 since S3 cannot be modified or blocked at G1 and will direclt reach C1 as transmitted
+ // This abstraction helps reduce the number of variables.
+ 
+ module link_L7 = link_L3 [link_L3_Jamm=link_L7_Jamm, link_flagL3=link_flagL7,S1RecG1=S3RecC1,smoke_sensor_S1=smoke_sensor_S3] endmodule 
+
+
+module gateway_G1
+
+// The module models 
+S1TxC1 : [0..2] init 2;  // Value of S1 transmitted to controller C1. This value may be different than what was received, owing to attacker element
+A2TxA2 : [0..2] init 2;  // Value of A2 command transmitted to A2 actuators. This value may be different than what was received, owing to attacker element
+G1_S1_Tx_flag : [0..1] init 0; // used to check, whether or not the S1 data has been transferred by G1 to S1
+G1_A1A2_Tx_flag : [0..1] init 0;  //  used to check, whether or not the A1 and A2 commands have been transferred by G1 to respective actuators
+
+
+
+	[] sensor_S1_tailor=0 & link_flagL3=1 & counter=2 & G1_S1_Tx_flag=0  -> (S1TxC1'=S1RecG1) & (G1_S1_Tx_flag'=1) ; //Attacker failed or did not attempt this exploit
+	[] sensor_S1_tailor=1 & link_flagL3=1 & counter=2 & S1RecG1=0  & G1_S1_Tx_flag=0 -> (S1TxC1'=1) & (G1_S1_Tx_flag'=1)  ;//If the attacker is successful in exploiting the vulnerability and the link L3 has transmitted it, the value S1TxC1 is inverse of S1RecG1. 
+	[] sensor_S1_tailor=1 & link_flagL3=1 & counter=2 & S1RecG1=1  & G1_S1_Tx_flag=0 -> (S1TxC1'=0) & (G1_S1_Tx_flag'=1);//If the attacker is successful in exploiting the vulnerability and the link L3 has transmitted it, the value S1TxC1 is inverse of S1RecG1.
+	[] sensor_S1_tailor=1 & link_flagL3=1 & counter=2 & S1RecG1=2  & G1_S1_Tx_flag=0 -> (S1TxC1'=2) & (G1_S1_Tx_flag'=1); //Link L3 was down
+
+	[] actuator_A2_tailor=0 & C1_flag=1 & counter=3 & G1_A1A2_Tx_flag=0 -> (A2TxA2'=A2TxG1) & (G1_A1A2_Tx_flag'=1) ;   // if the A2 command is not modified at G1, value transmitted by G1 (i.e. A2TxA2) is equal to value received at G1 (i.e. A2TxG1, value transmitted by C1 to G1)
+	[] actuator_A2_tailor=1 & C1_flag=1 & counter=3 & A2TxG1=0 & G1_A1A2_Tx_flag=0  -> (A2TxA2'=1) & (G1_A1A2_Tx_flag'=1) ;//If the attacker is successful in exploiting the vulnerability and the link is up, the value A2TxA2 is inverse of A2TxG1.
+	[] actuator_A2_tailor=1 & C1_flag=1 & counter=3 & A2TxG1=1  & G1_A1A2_Tx_flag=0 -> (A2TxA2'=0) & (G1_A1A2_Tx_flag'=1) ;//If the attacker is successful in exploiting the vulnerability and the link is up, the value A2TxA2 is inverse of A2TxG1.
+	[] actuator_A2_tailor=1 & C1_flag=1 & counter=3 & A2TxG1=2  & G1_A1A2_Tx_flag=0 -> (A2TxA2'=2) & (G1_A1A2_Tx_flag'=1) ;//Link is down
+
+
+endmodule
+
+
+
+module link_L4
+
+ link_flagL4 : [0..1] init 0;
+ A1 : [0..2] init 2;
+	
+	[l45] link_L4_Jamm=1 & counter=5 & G1_A1A2_Tx_flag=1 & link_flagL4=0-> (A1'=2) & (link_flagL4'=1);
+	[l45] link_L4_Jamm=0 & counter=5 & G1_A1A2_Tx_flag=1 & link_flagL4=0-> (A1'=A1TxG1) & (link_flagL4'=1);
+	
+  	    
+endmodule
+
+
+module link_L5 = link_L4 [link_L4_Jamm=link_L5_Jamm, link_flagL4=link_flagL5,A1=A2,A1TxG1=A2TxA2] endmodule
+
+
+
+
+module attacker
+
+
+cost : [0..10] init 0;
+link_L3_Jamm : [0..1] init 0;
+link_L4_Jamm : [0..1] init 0;
+link_L5_Jamm : [0..1] init 0;
+link_L7_Jamm : [0..1] init 0;
+counter : [0..7] init 0;
+// Subce both S1 and A2 operate on Zigbee, their data can be modified in transit, only if it reaches the gateway G1
+sensor_S1_tailor : [0..1] init 0;  // Decision variable, whether or not the attacker attempt to change the S1 observation (received at G1) was successful.
+actuator_A2_tailor : [0..1] init 0; // Decision variable, whether or not the attacker attempt to change the A2 command (received at G1) was successful. 
+api_S1_tailor : [0..1] init 0;  // // Decision variable, whether or not the attacker attempt to change the S1 value (received at API-S1) was successful.
+
+
+// Link L3 cannot be jammed in our scenario. So this variable will remain as zero (you may even like to remove this variable, if you want to reduce the numbe of variables)
+	[] link_L3_Jamm=0 & sensor_flag1=1 &  counter=0 -> (link_L3_Jamm'=0) & (counter'=7);
+	[] link_L7_Jamm=0 & sensor_flag1=1 &  counter=7 -> (link_L7_Jamm'=0) & (counter'=1);
+
+// link_flagL3 tells that the S1 data has been transferred to G1 by L3
+	[] sensor_S1_tailor=0 & link_flagL3=1 & cost<att_cap & counter=1 -> 0.4:(sensor_S1_tailor'=1) & (cost'=cost+1) & (counter'=2) + 0.6:(sensor_S1_tailor'=0)& (cost'=cost+1) & (counter'=2);
+	[] sensor_S1_tailor=0 & link_flagL3=1 & counter=1  -> (sensor_S1_tailor'=0) & (counter'=2) ;
+
+// C1_flag tells that A1 and A2 commands have been transmitted by C1 to G1
+	[] actuator_A2_tailor=0 & C1_flag=1 & cost<att_cap & counter=2 -> 0.4:(actuator_A2_tailor'=1) & (cost'=cost+1) & (counter'=3) + 0.6:(actuator_A2_tailor'=0)& (cost'=cost+1) & (counter'=3);
+	[] actuator_A2_tailor=0 & C1_flag=1 & counter=2  -> (actuator_A2_tailor'=0) & (counter'=3) ;
+
+// G1_A1A2_Tx_flag tells us that the commands of A1 and A2 have been transferred by the G1 to respective actuators
+
+	[] link_L4_Jamm=0 &  cost<att_cap  & counter=3 & G1_A1A2_Tx_flag=1 -> 0.4:(link_L4_Jamm'=1) & (cost'=cost+1) & (counter'=4) + 0.6:(link_L4_Jamm'=0)& (cost'=cost+1)& (counter'=4);
+	[] link_L4_Jamm=0 &  counter=3 & G1_A1A2_Tx_flag=1 -> (link_L4_Jamm'=0) & (counter'=4);
+
+	[] link_L5_Jamm=0 & cost<att_cap & counter=4 & G1_A1A2_Tx_flag=1-> 0.4:(link_L5_Jamm'=1) & (cost'=cost+1) & (counter'=5) + 0.6:(link_L5_Jamm'=0)& (cost'=cost+1) & (counter'=5);
+	[] link_L5_Jamm=0 & counter=4 & G1_A1A2_Tx_flag=1-> (link_L5_Jamm'=0) & (counter'=5) ;
+
+
+	[] api_S1_tailor=0 & sensor_flag_S2=1 & cost<att_cap & counter=5 -> 0.2:( api_S1_tailor'=1) & (cost'=cost+1) & (counter'=6) + 0.8:( api_S1_tailor'=0)& (cost'=cost+1) & (counter'=6);
+	[] api_S1_tailor=0 & sensor_flag_S2=1 & counter=5  -> ( api_S1_tailor'=0) & (counter'=6) ;
+
+
+
+
+
+
+endmodule
+
+
+
+
+
+
+module C1
+// The module models the controller function C1.
+// Policy P2: (1) Door opened if any of the two sensors (S1 and S3) report smoke
+// Policy P2: (2) Alarm triggered if any of the two sensors (S1 and S3) report smoke
+// S3RecC1 variable is used for S3 since the value cannot be changed in between. Again saving variables.
+ 
+    A1TxG1 : [0..2] init 2;  // door command transmitted to G1
+    A2TxG1 : [0..2] init 2;  // alarm command transmitted to G1
+	C1_flag : [0..1] init 0;
+	
+	// both door and alarm stays off/closed in these commands
+        [] S1TxC1=0 & S3RecC1=0 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=0)&(A2TxG1'=0) & (C1_flag'=1);
+	[] S1TxC1=2 & S3RecC1=0 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=0)&(A2TxG1'=0) & (C1_flag'=1);  
+        [] S1TxC1=0 & S3RecC1=2 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=0)&(A2TxG1'=0) & (C1_flag'=1); 
+	[] S1TxC1=2 & S3RecC1=2 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=0)&(A2TxG1'=0) & (C1_flag'=1); 
+	
+	// both door and alarm opened/triggered in this command
+	[] S1TxC1=1 & S3RecC1=0 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=1)&(A2TxG1'=1) & (C1_flag'=1);
+	[] S1TxC1=0 & S3RecC1=1 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=1)&(A2TxG1'=1) & (C1_flag'=1);
+	[] S1TxC1=2 & S3RecC1=1 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=1)&(A2TxG1'=1) & (C1_flag'=1);
+	[] S1TxC1=1 & S3RecC1=2 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=1)&(A2TxG1'=1) & (C1_flag'=1);
+	[] S1TxC1=1 & S3RecC1=1 & G1_S1_Tx_flag=1 & C1_flag=0 -> (A1TxG1'=1)&(A2TxG1'=1) & (C1_flag'=1);
+	
+	 
+	
+
+  
+endmodule
+
+
+
+
+module actuator_door_A1
+// The module models the door lock behavior.
+// If command (A1) is 0, door is locked. If command is 1, door is unlocked. if command is 2 (blocked), door is locked (default)
+ 
+    door : [0..2] init 2;
+    door_flag : [0..1] init 0;
+
+	[a] A1=0 & door_flag=0 & link_flagL4=1 -> (door'=0) & (door_flag'=1);
+	[a] A1=1 & door_flag=0 & link_flagL4=1 -> (door'=1) & (door_flag'=1);
+        [a] A1=2 & door_flag=0 & link_flagL4=1 -> (door'=0)& (door_flag'=1);
+	    
+endmodule
+
+
+module actuator_alarm_A2 = actuator_door_A1 [door=alarm,door_flag=alarm_flag,A1=A2,link_flagL4=link_flagL5] endmodule
+// The module models the alarm behavior.
+// If command (A2) is 0, alarm is off. If command is 1, alarm is on. if command is 2 (blocked), alarm is off.
+
+
+
+
+
+	
+
+
+	
+module ApiS1
+// The module models the behavior of API of S1 cloud server, where the data can be modified by the attacker
+// This value transmitted to S1 and S3 from API to fire department is same. If the value is modified both sensors will be modified	
+
+S1TxAPI : [0..2] init 2;  // Value transmitted by S1-API to fire-deptt.
+S3TxAPI : [0..2] init 2;  // Value transmitted by S3-API to fire-deptt.
+	
+	APIS1_TX_flag : [0..1] init 0;
+
+	[] api_S1_tailor=0 & sensor_flag_S2=1 & APIS1_TX_flag =0 & counter=6  -> ( S1TxAPI'=S1TxC1) & (S3TxAPI'=S3RecC1) & (APIS1_TX_flag'=1) ;
+	
+	[] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=0 & S3RecC1=0 & counter=6 -> ( S1TxAPI'=1) & (S3TxAPI'=1) & (APIS1_TX_flag'=1) ;
+	[] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=1 & S3RecC1=0 & counter=6 -> ( S1TxAPI'=0) & (S3TxAPI'=1) & (APIS1_TX_flag'=1) ;
+        [] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=2 & S3RecC1=0 & counter=6 -> ( S1TxAPI'=2) & (S3TxAPI'=1) &  (APIS1_TX_flag'=1) ;
+
+	[] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=0 & S3RecC1=1 & counter=6 -> ( S1TxAPI'=1) & (S3TxAPI'=0) & (APIS1_TX_flag'=1) ;
+	[] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=1 & S3RecC1=1 & counter=6 -> ( S1TxAPI'=0) & (S3TxAPI'=0) & (APIS1_TX_flag'=1) ;
+        [] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=2 & S3RecC1=1 & counter=6 -> ( S1TxAPI'=2) & (S3TxAPI'=0) &  (APIS1_TX_flag'=1) ;
+
+	[] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=0 & S3RecC1=2 & counter=6 -> ( S1TxAPI'=1) & (S3TxAPI'=2) & (APIS1_TX_flag'=1) ;
+	[] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=1 & S3RecC1=2 & counter=6 -> ( S1TxAPI'=0) & (S3TxAPI'=2) & (APIS1_TX_flag'=1) ;
+        [] api_S1_tailor=1 & sensor_flag_S2=1 & APIS1_TX_flag =0 & S1TxC1=2 & S3RecC1=2 & counter=6 -> ( S1TxAPI'=2) & (S3TxAPI'=2) &  (APIS1_TX_flag'=1) ;
+
+endmodule
+
+
+
+module ApiS2
+
+	S2TxAPI : [0..2] init 2;
+	APIS2_TX_flag : [0..1] init 0;
+
+	[] sensor_flag_S2=1 & APIS2_TX_flag =0 & APIS1_TX_flag=1 & counter=6  & door_sensor_S2=0 -> ( S2TxAPI'=0) & (APIS2_TX_flag'=1) ;
+	[] sensor_flag_S2=1 & APIS2_TX_flag =0 & APIS1_TX_flag=1 & counter=6  & door_sensor_S2=1 -> ( S2TxAPI'=1) & (APIS2_TX_flag'=1) ;
+		
+endmodule
+
+
+
+	
+module police
+
+	police : [0..2] init 2;
+	police_flag : [0..1] init 0;
+
+	[] S2TxAPI=1 & APIS2_TX_flag=1 & police_flag=0-> (police'=1) & (police_flag'=1);
+	[] S2TxAPI=0 & APIS2_TX_flag=1 & police_flag=0-> (police'=0) & (police_flag'=1);
+	[] S2TxAPI=2 & APIS2_TX_flag=1 & police_flag=0-> (police'=0) & (police_flag'=1);
+endmodule
+
+module fire_deptt
+
+//Fire_Department_Policy= If both sensors (S1 and S3) report smoke then send the tender
+
+	fire_tender : [0..2] init 2;
+	[] S1TxAPI=1 & S3RecC1=1 & APIS1_TX_flag=1  & police_flag=1 -> (fire_tender'=1);
+	
+	[] S1TxAPI=0 & S3TxAPI=0 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	[] S1TxAPI=0 & S3TxAPI=1 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	[] S1TxAPI=1 & S3TxAPI=0 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	[] S1TxAPI=1 & S3TxAPI=2 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	[] S1TxAPI=2 & S3TxAPI=1 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	[] S1TxAPI=0 & S3TxAPI=2 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	[] S1TxAPI=2 & S3TxAPI=0 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	[] S1TxAPI=2 & S3TxAPI=2 & APIS1_TX_flag=1 & police_flag=1 -> (fire_tender'=0);
+	endmodule
+
+
+
+//module fire_deptt = police [police=fire_tender,S2TxAPI=S1TxAPI,APIS2_TX_flag=APIS1_TX_flag] endmodule
+
