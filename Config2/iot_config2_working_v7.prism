@@ -3,7 +3,7 @@
 // It utilizes a global variable counter to pass the controls to different modules.
 mdp
 // global variables are those which can be changed by the attacker as well.
-// other gloabal variables include counter...
+// other global variables include counter...
    global S1RecG1 : [0..2] init 0;
    global A2TxG1 : [0..2] init 0;
    global counter : [0..17] init 0;
@@ -30,7 +30,7 @@ endmodule
 
 
 
-module S1
+module sensor_smoke_S1
 // The module models the observations recorded by Smoke sensor S1. If the smoke is 0 the observation (S1)
 // is 0 and if smoke is 1 then the observation S1=1 
     
@@ -60,11 +60,11 @@ module attacker
 [] L4=1 & counter=12 & cost <att_cap-> 0.4:(L4'=0)&(counter'=9)&(cost'=cost+1)+0.6:(L4'=1)&(counter'=9)&(cost'=cost+1);
 
 
-// changing S1 value with probability 0.45, the S1 value must reach G1 to be changed
+// changing S1 value with probability 0.4, the S1 value must reach G1 to be changed
 [] S1RecG1=0 & counter=6 & cost <att_cap -> 0.6:(S1RecG1'=0)&(counter'=7)&(cost'=cost+1)+0.4:(S1RecG1'=1)&(counter'=7)&(cost'=cost+1);
 [] S1RecG1=1 & counter=6 & cost <att_cap -> 0.6:(S1RecG1'=1)&(counter'=7)&(cost'=cost+1)+0.4:(S1RecG1'=0)&(counter'=7)&(cost'=cost+1);
 
-// changing A2 value with probability 0.45, the A2 command value must reach G1 to be changed
+// changing A2 value with probability 0.4, the A2 command value must reach G1 to be changed
 [] A2TxG1=0 & counter=8 & cost <att_cap -> 0.6:(A2TxG1'=0)&(counter'=12)&(cost'=cost+1)+0.4:(A2TxG1'=1)&(counter'=12)&(cost'=cost+1);
 [] A2TxG1=1 & counter=8 & cost <att_cap -> 0.6:(A2TxG1'=1)&(counter'=12)&(cost'=cost+1)+0.4:(A2TxG1'=0)&(counter'=12)&(cost'=cost+1);
 // Non deterministically not-attempting to channge command
@@ -169,7 +169,7 @@ endmodule
 
 
 
-module S2
+module sensor_door_S2
 
 	S2 : [0..2] init 2;
 
