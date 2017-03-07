@@ -1,0 +1,220 @@
+
+// Modelling of Config-2 is done in a different style than config-1 and config-3, just to show an alternate approach towards SHAS modelling.
+// It utilizes a global variable counter to pass the controls to different modules.
+mdp
+// global variables are those which can be changed by the attacker as well.
+// other gloabal variables include counter...
+   global S1RecG1 : [0..2] init 0;
+   global A2TxG1 : [0..2] init 0;
+   global counter : [0..17] init 0;
+   global L3 : [0..1] init 1;
+   global L4 : [0..1] init 1;
+   global L5 : [0..1] init 1;
+   global cost : [0..10] init 0;
+   global S1RecAPI : [0..2] init 2;
+const int att_cap = 5; //Attacker capability
+
+
+module smoke
+// The module models the observations recorded by Smoke sensor S1. It non-deterministically chooses the next value of smoke. If the smoke is 0 the observation (S1)
+// is 0 and if smoke is 1 then the observation S1=1 
+    
+	smoke : [0..1] init 0;
+    	[] smoke=0 & counter=0 -> (smoke'=0) & (counter'=1);
+	[] smoke=0 & counter=0 -> (smoke'=1) & (counter'=1);
+    	[] smoke=1 & counter=0->  (smoke'=1) & (counter'=1);
+	[] smoke=1 & counter=0->  (smoke'=0) & (counter'=1);
+    
+endmodule
+
+
+
+
+module S1
+// The module models the observations recorded by Smoke sensor S1. If the smoke is 0 the observation (S1)
+// is 0 and if smoke is 1 then the observation S1=1 
+    
+	S1 : [0..1] init 0;
+
+    	[] smoke=0 & counter=1 -> (S1'=0)& (counter'=2);
+	[] smoke=1 & counter=1 -> (S1'=1)& (counter'=2);
+    
+endmodule
+
+
+
+
+
+
+
+module attacker
+
+
+// L3 cannot be jammed in our configurations. so leaving this as 1
+[] L3=1 & counter=2->(L3'=1)&(counter'=3);
+
+
+// jamming link L4 with prob 0.4
+[] L5=1 & counter=4 & cost <att_cap-> 0.4:(L5'=0)&(counter'=5)&(cost'=cost+1)+0.6:(L5'=1)&(counter'=5)&(cost'=cost+1);
+
+[] L4=1 & counter=12 & cost <att_cap-> 0.4:(L4'=0)&(counter'=9)&(cost'=cost+1)+0.6:(L4'=1)&(counter'=9)&(cost'=cost+1);
+
+
+// changing S1 value with probability 0.45, the S1 value must reach G1 to be changed
+[] S1RecG1=0 & counter=6 & cost <att_cap -> 0.6:(S1RecG1'=0)&(counter'=7)&(cost'=cost+1)+0.4:(S1RecG1'=1)&(counter'=7)&(cost'=cost+1);
+[] S1RecG1=1 & counter=6 & cost <att_cap -> 0.6:(S1RecG1'=1)&(counter'=7)&(cost'=cost+1)+0.4:(S1RecG1'=0)&(counter'=7)&(cost'=cost+1);
+
+// changing A2 value with probability 0.45, the A2 command value must reach G1 to be changed
+[] A2TxG1=0 & counter=8 & cost <att_cap -> 0.6:(A2TxG1'=0)&(counter'=12)&(cost'=cost+1)+0.4:(A2TxG1'=1)&(counter'=12)&(cost'=cost+1);
+[] A2TxG1=1 & counter=8 & cost <att_cap -> 0.6:(A2TxG1'=1)&(counter'=12)&(cost'=cost+1)+0.4:(A2TxG1'=0)&(counter'=12)&(cost'=cost+1);
+// Non deterministically not-attempting to channge command
+[] A2TxG1=0 & counter=8  -> (A2TxG1'=0)&(counter'=12);
+[] A2TxG1=1 & counter=8  -> (A2TxG1'=1)&(counter'=12);
+[] A2TxG1=2 & counter=8  -> (A2TxG1'=2)&(counter'=12);
+
+// changing the value of S1 at API with probability 0.2
+[] S1RecG1=1 & counter= 14 & cost <att_cap-> 0.2:(S1RecAPI'=0)&(counter'=15)&(cost'=cost+1)+0.8:(S1RecAPI'=1)&(counter'=15)&(cost'=cost+1);
+[] S1RecG1=0 & counter= 14 & cost <att_cap-> 0.2:(S1RecAPI'=1)&(counter'=15)&(cost'=cost+1)+0.8:(S1RecAPI'=0)&(counter'=15)&(cost'=cost+1);
+
+
+endmodule
+
+
+
+
+module L3
+// The module models the link status of L3 link.
+// S1RecG1 models the value received at gateway G1 from S1. If the link L3 is down the received value =2 which is used to code that the value is not received
+// S1RecA2 is the value of S1 received by A2 in a mesh network
+	S1RecA2 : [0..2] init 2; 
+
+	[] L3=1 & (counter=2|counter=3) -> (S1RecA2'=S1)&(counter'=4);
+	//[] L3=0 & (counter=2|counter=3) -> (S1RecA2'=2)&(counter'=4);
+
+    	    
+endmodule
+
+
+module L5
+// The module models the link status of L5 link.
+// SA2TxG1 models the command value transmitted by gateway G1 as received by C1. If the link L5 is down the received value =2 which is used to code that the value is not received
+ 
+
+    A2 : [0..2] init 2;
+	
+	[] L5=1 & (counter=4|counter=5) -> (S1RecG1'=S1RecA2) & (counter'=6);
+	[] L5=0 & (counter=4|counter=5)-> (S1RecG1'=2) & (counter'=6);
+	
+    	
+	[] L5=1 & (counter=10) -> (A2'=A2TxG1) & (counter'=11);
+	[] L5=0 & (counter=10)-> (A2'=2) & (counter'=11);
+	    
+endmodule
+
+
+
+module C1
+// The module models the controller function C1.
+// if the received observation from S1 is 0 both commands A1 and A2 are 0, if the received observation is 1 the commands are also 1
+ 
+    A1TxG1 : [0..2] init 2;
+    
+
+    	[] S1RecG1=0 & (counter=6|counter=7)-> (A1TxG1'=0)&(A2TxG1'=0) & (counter'=8);
+    	[] S1RecG1=1 & (counter=6|counter=7)-> (A1TxG1'=1)&(A2TxG1'=1) & (counter'=8);
+    	[] S1RecG1=2 & (counter=6|counter=7)-> (A1TxG1'=2)&(A2TxG1'=2) & (counter'=8);    
+endmodule
+
+
+
+
+module L4
+// The module models the link status of L4 link.
+// SA1TxG1 models the command value transmitted by gateway G1 as received by C1. If the link L4 is down the received value =2 which is used to code that the value is not received
+ 
+    A1 : [0..2] init 2;
+
+    	[] L4=1 & (counter=12|counter=9)-> (A1'=A1TxG1) & (counter'=10);
+	[] L4=0 & (counter=12|counter=9)-> (A1'=2)  & (counter'=10);
+	    
+endmodule
+
+
+
+
+
+
+
+module A1A2
+// The module models the door lock behavior.
+// If command (A1) is 0, door is locked. If command is 1, door is unlocked. if command is 2 (blocked), door is locked
+ 
+    door : [0..2] init 2;
+    alarm : [0..2] init 2;
+    
+    	[] A1=0 & A2=0 & (counter=11)-> (door'=0) & (alarm'=0) & (counter'=13); 
+    	[] A1=0 & A2=1 & (counter=11)-> (door'=0) & (alarm'=1) & (counter'=13); 
+    	[] A1=0 & A2=2 & (counter=11)-> (door'=0) & (alarm'=0) & (counter'=13);
+
+    	[] A1=1 & A2=0 & (counter=11)-> (door'=1) & (alarm'=0) & (counter'=13); 
+    	[] A1=1 & A2=1 & (counter=11)-> (door'=1) & (alarm'=1) & (counter'=13); 
+    	[] A1=1 & A2=2 & (counter=11)-> (door'=1) & (alarm'=0) & (counter'=13);
+
+    	[] A1=2 & A2=0 & (counter=11)-> (door'=0) & (alarm'=0) & (counter'=13); 
+    	[] A1=2 & A2=1 & (counter=11)-> (door'=0) & (alarm'=1)& (counter'=13); 
+    	[] A1=2 & A2=2 & (counter=11)-> (door'=0) & (alarm'=0) & (counter'=13);
+
+	    
+endmodule
+
+
+
+module S2
+
+	S2 : [0..2] init 2;
+
+	 [] door=1 & counter= 13 -> (S2'=1) & (counter'=14);
+	 [] door=0 & counter= 13 -> (S2'=0)& (counter'=14);
+
+
+endmodule
+
+
+	
+module ApiS1
+
+		 
+	 [] S1RecG1=1 & counter= 14 -> (S1RecAPI'=1)&(counter'=15);
+	 [] S1RecG1=0 & counter= 14 -> (S1RecAPI'=0)&(counter'=15);
+endmodule
+
+
+module ApiS2
+// Since S2 value can neither be changed nor jammed in transit, we abstract that the same value is received at ApiS2
+	S2RecAPI : [0..2] init 2;
+
+	 [] S2=1 & counter= 15 -> (S2RecAPI'=1)&(counter'=16);
+	 [] S2=0 & counter= 15 -> (S2RecAPI'=0)&(counter'=16);
+endmodule
+
+
+	
+module fire_department
+
+	fire_tender : [0..2] init 2;
+
+	 [] S1RecAPI=0 & counter= 16 -> (fire_tender'=0) & (counter'=17);
+	 [] S1RecAPI=1 & counter= 16 -> (fire_tender'=1) & (counter'=17);
+	 [] S1RecAPI=2 & counter= 16 -> (fire_tender'=0) & (counter'=17);
+endmodule
+
+module police
+
+	police : [0..2] init 2;
+
+	 [] S2RecAPI=0 & counter= 17 -> (police'=0);
+	 [] S2RecAPI=1 & counter= 17 -> (police'=1);
+	 [] S2RecAPI=2 & counter= 17 -> (police'=0);
+endmodule
+
+

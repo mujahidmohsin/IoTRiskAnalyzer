@@ -1,0 +1,41 @@
+const int x;
+
+// Theft max prob
+Pmax=? [ smoke=0 U (door=1&alarm=0) ]
+
+// Theft max prob
+Pmax=? [ F smoke=0&door=1&alarm=0 ]
+
+// Missed Alarm Max Prob
+filter(max, Pmax=? [ G alarm!=1 ], smoke=1&counter=1)
+
+// False Alarm Max Prob
+filter(max, Pmax=? [ F alarm=1 ], smoke=0&counter=1)
+
+// Missed Alarm with cost
+filter(max, Pmax=? [ G alarm!=1&cost<=x ], smoke=1&counter=1)
+
+// Theft with cost
+filter(max, Pmax=? [ F door=1&alarm=0&cost<=x ], smoke=0&counter=1)
+
+// Compromised Evacuation
+filter(max, Pmax=? [ G door!=1 ], smoke=1&counter=1)
+
+// Compromised Evacutation with cost
+filter(max, Pmax=? [ G door!=1&cost<=x ], smoke=1&counter=1)
+
+// False Alarm with cost
+filter(max, Pmax=? [ F alarm=1&cost<=x ], smoke=0&counter=1)
+
+// Door opened but police not arrived
+filter(max, Pmax=? [ G police!=1 ], door=1&counter=13)
+
+// False Alarm with false tender with cost
+filter(max, Pmax=? [ F (alarm=1|fire_tender=1)&cost<=x ], smoke=0&counter=1)
+
+// Missed Both Alarms with cost
+filter(max, Pmax=? [ G alarm!=1&fire_tender!=1&cost<=x ], smoke=1&counter=1)
+
+// FINAL Missed Either Alarm
+filter(max, Pmax=? [ F ((alarm=1&fire_tender=0)|(alarm=0&fire_tender=1))&cost<=x ], smoke=1&counter=1)
+
